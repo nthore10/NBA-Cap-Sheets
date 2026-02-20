@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Indiana Pacers - Salary Cap Sheet</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f5f5f5;color:#333}
+.container{max-width:1200px;margin:0 auto;padding:10px}
+.team-header{padding:15px 20px;border-radius:8px 8px 0 0;text-align:center}
+.team-header h1{font-size:24px;font-weight:700;margin-bottom:2px}
+.team-header h2{font-size:14px;font-weight:400;opacity:.9}
+.legend{display:flex;flex-wrap:wrap;gap:12px;padding:8px 15px;background:#fff;border-bottom:1px solid #e0e0e0;font-size:11px}
+.legend-item{display:flex;align-items:center;gap:4px}
+.legend-dot{width:10px;height:10px;border-radius:50%}
+.dot-po{background:#00B050}.dot-to{background:#F79646}.dot-ng{background:#C00000}.dot-rfa{background:#0070C0}.dot-ufa{background:#7030A0}
+.legend-name{font-weight:600;padding:1px 6px;border-radius:3px;font-size:10px}
+.ln-full{color:#00B050}.ln-early{color:#F79646}.ln-non{color:#C00000}
+table.cap{width:100%;border-collapse:collapse;background:#fff;font-size:12px}
+table.cap th{padding:8px 6px;text-align:center;font-weight:600;font-size:11px;white-space:nowrap;border:1px solid rgba(255,255,255,.2)}
+table.cap th.l{text-align:left;min-width:140px}
+table.cap td{padding:5px 6px;border:1px solid #e8e8e8;text-align:right;white-space:nowrap}
+td.pos{text-align:center;font-weight:600;width:40px}
+td.nm{text-align:left;font-weight:500}
+tr.ev{background:#f0f4f8}tr.od{background:#fff}
+tr.sep td{height:4px;padding:0;background:#e0e0e0;border:none}
+tr.sum td{font-weight:600;border-top:2px solid var(--team-primary);background:#f8f9fa}
+td.sl{text-align:left}
+.po{color:#00B050!important;font-weight:600}.to{color:#F79646!important;font-weight:600}
+.ng{color:#C00000!important;font-weight:600}.rfa{color:#0070C0!important;font-weight:600}
+.ufa{color:#7030A0!important;font-weight:600}.nv{color:#c00}
+.sec-hdr{background:var(--team-primary);color:#fff;padding:8px 15px;font-weight:700;font-size:13px;margin-top:10px;border-radius:4px 4px 0 0}
+.side-tables{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-top:15px}
+.side-tbl{background:#fff;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.side-tbl h3{padding:8px 12px;font-size:13px}
+.side-tbl table{width:100%;border-collapse:collapse;font-size:11px}
+.side-tbl td,.side-tbl th{padding:4px 8px;border:1px solid #e8e8e8}
+.side-tbl th{background:#f5f5f5;font-weight:600;text-align:left}
+.loading{text-align:center;padding:40px;font-size:16px;color:#666}
+.error{text-align:center;padding:40px;font-size:14px;color:#c00}
+@media(max-width:768px){.side-tables{grid-template-columns:1fr}table.cap{font-size:10px}table.cap th,table.cap td{padding:3px 4px}}
+</style>
+</head>
+<body>
+
+<div class="container" id="app">
+  <div class="loading" id="loading">Loading salary cap data...</div>
+</div>
+
+<script>
+// ============================================================
+// TEAM CONFIGURATION — Change these for each team
+// ============================================================
+const TEAM_CONFIG = {
+  // Published CSV URL for this team's tab (File → Share → Publish to web → select tab → CSV)
+  csvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRTwTOS_rNBYI8d8zDUivGFWXsXcxlOZgrqn5o-WCvFC5aNAR3vLsSqllE7aO0BRw/pub?gid=1218727253&single=true&output=csv',
+  primaryColor: '#002D62',
+  textColor: '#FDBB30',
+};
+// ============================================================
+
+const app = document.getElementById('app');
+
+function parseCSV(text) {
+  const rows = [];
+  let current = '';
+  let inQuotes = false;
+  for (let line of text.split('\n')) {
+    current += (current ? '\n' : '') + line;
+    if ((current.match(/"/g) || []).length % 2 === 0) { rows.push(parseCSVRow(current)); current = ''; }
+  }
+  if (current) rows.push(parseCSVRow(current));
+  return rows;
+}
+
+function parseCSVRow(line) {
+  const result = [];
+  let current = '';
+  let inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') { if (inQ && line[i+1] === '"') { current += '"'; i++; } else inQ = !inQ; }
+    else if (ch === ',' && !inQ) { result.push(current); current = ''; }
+    else if (ch !== '\r') current += ch;
+  }
+  result.push(current);
+  return result;
+}
+
+function clean(val) { return (val || '').replace(/\u00a0/g, ' ').trim(); }
+function col(row, idx) { return clean(row && row.length > idx ? row[idx] : ''); }
+
+function fmtMoney(val) {
+  const v = clean(val);
+  if (!v || v === '0' || v === '$0') return '';
+  return v;
+}
+
+function isNegative(val) {
+  const v = clean(val);
+  return v.includes('(') || (v.startsWith('-') && v.includes('$'));
+}
+
+function getStatusClass(status) {
+  const s = clean(status).toLowerCase();
+  if (!s || s.startsWith('$') || s.includes('%') || s === '0' || s === '-' || s === 'guaranteed') return '';
+  if (s === 'team option') return 'to';
+  if (s === 'player option') return 'po';
+  if (s === 'non-guaranteed' || s === 'non-guarantee') return 'ng';
+  if (s === 'unrestricted') return 'ufa';
+  if (s === 'restricted') return 'rfa';
+  return '';
+}
+
+function getNameClass(faType) {
+  const s = clean(faType).toLowerCase();
+  if (s.includes('full bird') || s.includes('full-bird')) return 'po';
+  if (s.includes('non bird') || s.includes('non-bird')) return 'ng';
+  if (s.includes('early bird') || s.includes('early-bird')) return 'to';
+  return '';
+}
+
+function buildPage(rows) {
+  const teamName = col(rows[0], 1) || 'NBA Team';
+  document.title = `${teamName} - Salary Cap Sheet`;
+  document.documentElement.style.setProperty('--team-primary', TEAM_CONFIG.primaryColor);
+
+  const pc = TEAM_CONFIG.primaryColor;
+  const tc = TEAM_CONFIG.textColor;
+  const TH = ` style="background:${pc};color:${tc}"`;
+
+  // ================================================================
+  // PARSE ALL SECTIONS
+  // ================================================================
+
+  // ---- Players & Summary ----
+  const summaryLabels = [
+    'Total Salary','Cap Holds','Guaranteed Money','Dead Money','Total Cap',
+    'League Salary Cap','Current Cap Room','Projected Cap Room','Luxury Tax',
+    'Room Under Tax','First Apron','Room Under First Apron','Second Apron',
+    'Room Under Second Apron','Luxury Tax Payment'
+  ];
+  const playerRows = [], summaryRows = [];
+
+  for (let i = 5; i < rows.length; i++) {
+    const r = rows[i];
+    const label = col(r, 2);
+    if (summaryLabels.includes(label)) {
+      summaryRows.push({ label, values: [0,1,2,3,4].map(n => ({
+        sal: fmtMoney(r[3+n*2]), pct: col(r, 4+n*2)
+      }))});
+      continue;
+    }
+    if (['Contract Incentives','Partial Guarantees','Dead Cap','Tax & Apron Only'].includes(col(r,1)) ||
+        col(r,2) === 'Trade Bonuses') break;
+
+    const pos = col(r,1), name = label;
+    const hasSalary = [3,5,7,9,11].some(c => fmtMoney(r[c]));
+    if (!pos && !name && !hasSalary) continue;
+
+    playerRows.push({
+      pos, name, faType: col(r, 25),
+      years: [0,1,2,3,4].map(n => ({
+        sal: fmtMoney(r[3+n*2]), pct: col(r, 4+n*2), status: col(r, 16+n*2)
+      }))
+    });
+  }
+
+  // ---- Right-side columns (13/14) ----
+  const firstRound = [], secondRound = [], twoWay = [], tradeExceptions = [];
+  const exceptions = [], cashInTrades = [], draftRights = [];
+  let hardCap = '', rightSection = '';
+
+  for (let i = 2; i < rows.length; i++) {
+    const r = rows[i];
+    const c13 = col(r,13), c14 = col(r,14);
+
+    if (c13 === 'First Round:')        { rightSection = 'first'; continue; }
+    if (c13 === 'Second Round:')       { rightSection = 'second'; continue; }
+    if (c13 === 'Exceptions Available'){ rightSection = 'exceptions'; continue; }
+    if (c13 === 'Hard Cap?')           { hardCap = c14; rightSection = ''; continue; }
+    if (c13 === 'Two Way Deals')       { rightSection = 'twoway'; continue; }
+    if (c13 === 'Trade Exceptions')    { rightSection = 'te'; continue; }
+    if (c13 === 'Date Expires')        { continue; }
+    if (c13 === 'Cash In Trades')      { rightSection = 'cash'; continue; }
+    if (c13 === 'Draft Rights')        { rightSection = 'draftrights'; continue; }
+
+    if (['RMLE','NTMLE','TMLE','BAE'].includes(c13)) { exceptions.push({ type: c13, amount: c14 }); continue; }
+
+    if (rightSection === 'first' && /^\d{4}$/.test(c13)) firstRound.push({ year: c13, desc: c14 });
+    else if (rightSection === 'second' && /^\d{4}$/.test(c13)) secondRound.push({ year: c13, desc: c14 });
+    else if (rightSection === 'twoway' && c13 && c14) twoWay.push({ pos: c13, name: c14 });
+    else if (rightSection === 'te' && c13 && c14) tradeExceptions.push({ expires: c13, amount: c14 });
+    else if (rightSection === 'cash' && c13 && c14) cashInTrades.push({ label: c13, amount: c14 });
+    else if (rightSection === 'draftrights' && c13 && c14) draftRights.push({ year: c13, name: c14 });
+  }
+
+  // ---- Contract Incentives ----
+  const incentiveRows = [];
+  let inSection = false;
+  for (let i = 0; i < rows.length; i++) {
+    if (col(rows[i],1) === 'Contract Incentives') { inSection = true; continue; }
+    if (inSection) {
+      if (col(rows[i],1) === 'Season') continue;
+      if (col(rows[i],2) === 'Trade Bonuses') break;
+      const r = rows[i];
+      const player = col(r,2), max = fmtMoney(r[3]), likely = fmtMoney(r[5]);
+      const unlikely = fmtMoney(r[7]), earned = fmtMoney(r[9]), pending = fmtMoney(r[11]);
+      if (player || max || likely || unlikely || earned || pending)
+        incentiveRows.push({ season: col(r,1), player, max, likely, unlikely, earned, pending });
+    }
+  }
+
+  // ---- Trade Bonuses ----
+  const tradeBonusRows = [];
+  inSection = false;
+  for (let i = 0; i < rows.length; i++) {
+    if (col(rows[i],2) === 'Trade Bonuses') { inSection = true; continue; }
+    if (inSection) {
+      if (col(rows[i],2) === 'Player') continue;
+      if (col(rows[i],1) === 'Partial Guarantees') break;
+      const r = rows[i];
+      const player = col(r,2), amount = fmtMoney(r[3]), prorated = fmtMoney(r[4]);
+      if (player || amount) tradeBonusRows.push({ player, amount, prorated });
+    }
+  }
+
+  // ---- Partial Guarantees ----
+  const partialRows = [];
+  inSection = false;
+  for (let i = 0; i < rows.length; i++) {
+    if (col(rows[i],1) === 'Partial Guarantees') { inSection = true; continue; }
+    if (inSection) {
+      if (col(rows[i],2) === 'Player') continue;
+      if (['Dead Cap','Tax & Apron Only'].includes(col(rows[i],1))) break;
+      const r = rows[i], player = col(r,2);
+      const vals = [fmtMoney(r[3]),fmtMoney(r[5]),fmtMoney(r[7]),fmtMoney(r[9]),fmtMoney(r[11])];
+      if (player) partialRows.push({ player, values: vals });
+      else if (vals.some(v => v && v !== '$0')) partialRows.push({ player: 'Total', values: vals });
+    }
+  }
+
+  // ---- Dead Cap ----
+  const deadCapPlayers = [];
+  let deadCapTotal = null;
+  inSection = false;
+  for (let i = 0; i < rows.length; i++) {
+    if (col(rows[i],1) === 'Dead Cap' && !col(rows[i],2)) { inSection = true; continue; }
+    if (inSection) {
+      if (col(rows[i],2) === 'Player') continue;
+      if (col(rows[i],1) === 'Tax & Apron Only') break;
+      const r = rows[i], name = col(r,2);
+      const vals = [col(r,3),col(r,5),col(r,7),col(r,9),col(r,11)];
+      const hasV = vals.some(v => v && v !== '$0' && v !== '0');
+      if (name && hasV) deadCapPlayers.push({ name, values: vals });
+      else if (!name && hasV) { deadCapTotal = vals; break; }
+    }
+  }
+
+  // ---- Tax & Apron Only ----
+  const taxApronRows = [];
+  inSection = false;
+  for (let i = 0; i < rows.length; i++) {
+    if (col(rows[i],1) === 'Tax & Apron Only') { inSection = true; continue; }
+    if (inSection) {
+      if (col(rows[i],2) === 'Player') continue;
+      const r = rows[i], player = col(r,2);
+      const vals = [fmtMoney(r[3]),fmtMoney(r[5]),fmtMoney(r[7]),fmtMoney(r[9]),fmtMoney(r[11])];
+      if (player) taxApronRows.push({ player, values: vals });
+      else if (vals.some(v => v && v !== '$0')) taxApronRows.push({ player: 'Total', values: vals });
+    }
+  }
+
+  // ================================================================
+  // BUILD HTML
+  // ================================================================
+  let html = '';
+
+  // Team Header
+  html += `<div class="team-header" style="background:${pc};color:${tc}">
+    <h1>${teamName}</h1><h2>Salary Cap Sheet</h2></div>`;
+
+  // Legend: Salary Colors
+  html += `<div class="legend">
+    <div class="legend-item"><div class="legend-dot dot-po"></div> Player Option</div>
+    <div class="legend-item"><div class="legend-dot dot-to"></div> Team Option</div>
+    <div class="legend-item"><div class="legend-dot dot-ng"></div> Non-Guarantee</div>
+    <div class="legend-item"><div class="legend-dot dot-rfa"></div> RFA Cap Hold</div>
+    <div class="legend-item"><div class="legend-dot dot-ufa"></div> UFA Cap Hold</div>
+  </div>`;
+
+  // Legend: Player Name Colors (FA Status)
+  html += `<div class="legend" style="border-top:none">
+    <span style="font-weight:600;margin-right:4px">Current Year FA Status:</span>
+    <div class="legend-item"><span class="legend-name ln-non">■</span> Non-Bird Rights Free Agent</div>
+    <div class="legend-item"><span class="legend-name ln-early">■</span> Early-Bird Rights Free Agent</div>
+    <div class="legend-item"><span class="legend-name ln-full">■</span> Full-Bird Rights Free Agent</div>
+  </div>`;
+
+  // Main Salary Table
+  html += `<div style="overflow-x:auto"><table class="cap"><thead><tr>
+    <th style="width:40px"${TH}>Pos</th><th class="l"${TH}>Player</th>
+    <th colspan="2"${TH}>2025/2026</th><th colspan="2"${TH}>2026/2027</th>
+    <th colspan="2"${TH}>2027/2028</th><th colspan="2"${TH}>2028/2029</th>
+    <th colspan="2"${TH}>2029/2030</th>
+  </tr></thead><tbody>`;
+
+  playerRows.forEach((p, idx) => {
+    const rc = idx % 2 === 0 ? 'ev' : 'od';
+    const nc = getNameClass(p.faType);
+    html += `<tr class="${rc}"><td class="pos">${p.pos}</td>`;
+    html += `<td class="nm${nc ? ' '+nc : ''}">${p.name}</td>`;
+    p.years.forEach(y => {
+      const sc = getStatusClass(y.status);
+      html += `<td${sc ? ' class="'+sc+'"' : ''}>${y.sal}</td><td>${y.pct}</td>`;
+    });
+    html += '</tr>';
+  });
+
+  html += '<tr class="sep"><td colspan="12"></td></tr>';
+
+  summaryRows.forEach(s => {
+    html += `<tr class="sum"><td></td><td class="sl" style="color:${pc}">${s.label}</td>`;
+    s.values.forEach(v => {
+      const neg = isNegative(v.sal);
+      html += `<td${neg ? ' class="ng nv"' : ''}>${v.sal}</td><td>${v.pct}</td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+
+  // Side Tables
+  html += '<div class="side-tables">';
+
+  // Left: Draft Capital
+  html += `<div class="side-tbl"><h3 style="background:${pc};color:${tc}">Draft Capital</h3><table>`;
+  if (firstRound.length) {
+    html += '<tr><th colspan="2">First Round</th></tr>';
+    firstRound.forEach(d => html += `<tr><td style="font-weight:600;width:50px">${d.year}</td><td>${d.desc}</td></tr>`);
+  }
+  if (secondRound.length) {
+    html += '<tr><th colspan="2">Second Round</th></tr>';
+    secondRound.forEach(d => html += `<tr><td style="font-weight:600;width:50px">${d.year}</td><td>${d.desc}</td></tr>`);
+  }
+  html += '</table></div>';
+
+  // Right: Two-Way, TE, Exceptions, Cash, Draft Rights, Hard Cap
+  html += '<div class="side-tbl">';
+
+  if (twoWay.length) {
+    html += `<h3 style="background:${pc};color:${tc}">Two-Way Deals</h3><table>`;
+    twoWay.forEach(tw => html += `<tr><td style="width:40px;font-weight:600">${tw.pos}</td><td>${tw.name}</td></tr>`);
+    html += '</table>';
+  }
+
+  if (tradeExceptions.length) {
+    html += `<h3 style="background:${pc};color:${tc}">Trade Exceptions</h3><table>`;
+    html += '<tr><th>Expires</th><th>Amount</th></tr>';
+    tradeExceptions.forEach(te => html += `<tr><td>${te.expires}</td><td style="text-align:right">$ ${te.amount.replace(/^\$\s*/,'')}</td></tr>`);
+    html += '</table>';
+  }
+
+  if (exceptions.length) {
+    html += `<h3 style="background:${pc};color:${tc}">Exceptions Available</h3><table>`;
+    html += '<tr><th>Type</th><th>Amount</th></tr>';
+    exceptions.forEach(ex => html += `<tr><td style="font-weight:600">${ex.type}</td><td style="text-align:right">${ex.amount || '—'}</td></tr>`);
+    html += '</table>';
+  }
+
+  if (cashInTrades.length) {
+    html += `<h3 style="background:${pc};color:${tc}">Cash In Trades</h3><table>`;
+    cashInTrades.forEach(c => html += `<tr><td>${c.label}</td><td style="text-align:right">${c.amount}</td></tr>`);
+    html += '</table>';
+  }
+
+  if (draftRights.length) {
+    html += `<h3 style="background:${pc};color:${tc}">Draft Rights</h3><table>`;
+    html += '<tr><th>Year</th><th>Player</th></tr>';
+    draftRights.forEach(dr => html += `<tr><td style="font-weight:600;width:50px">${dr.year}</td><td>${dr.name}</td></tr>`);
+    html += '</table>';
+  }
+
+  if (hardCap) html += `<div style="padding:8px 12px;background:#f5f5f5;font-size:11px;font-weight:600">Hard Cap?: ${hardCap}</div>`;
+
+  html += '</div></div>';
+
+  // Dead Cap
+  if (deadCapPlayers.length) {
+    html += '<div class="sec-hdr">Dead Cap</div>';
+    html += `<div style="overflow-x:auto"><table class="cap"><thead><tr>
+      <th class="l"${TH}>Player</th><th${TH}>2025/2026</th><th${TH}>2026/2027</th>
+      <th${TH}>2027/2028</th><th${TH}>2028/2029</th><th${TH}>2029/2030</th>
+    </tr></thead><tbody>`;
+    deadCapPlayers.forEach(dc => {
+      html += `<tr><td class="nm">${dc.name}</td>`;
+      dc.values.forEach(v => html += `<td>${v}</td>`);
+      html += '</tr>';
+    });
+    if (deadCapTotal) {
+      html += '<tr style="font-weight:700;border-top:2px solid #333"><td class="nm">Total</td>';
+      deadCapTotal.forEach(v => html += `<td>${v}</td>`);
+      html += '</tr>';
+    }
+    html += '</tbody></table></div>';
+  }
+
+  // Contract Incentives
+  if (incentiveRows.length && incentiveRows.some(r => r.player || r.max)) {
+    html += '<div class="sec-hdr">Contract Incentives</div>';
+    html += `<div style="overflow-x:auto"><table class="cap"><thead><tr>
+      <th${TH}>Season</th><th class="l"${TH}>Player</th><th${TH}>Max</th>
+      <th${TH}>Likely</th><th${TH}>Unlikely</th><th${TH}>Earned</th><th${TH}>Pending</th>
+    </tr></thead><tbody>`;
+    incentiveRows.forEach((r, idx) => {
+      html += `<tr class="${idx%2===0?'ev':'od'}"><td class="pos">${r.season}</td><td class="nm">${r.player}</td>`;
+      html += `<td>${r.max}</td><td>${r.likely}</td><td>${r.unlikely}</td><td>${r.earned}</td><td>${r.pending}</td></tr>`;
+    });
+    html += '</tbody></table></div>';
+  }
+
+  // Trade Bonuses
+  if (tradeBonusRows.length && tradeBonusRows.some(r => r.player)) {
+    html += '<div class="sec-hdr">Trade Bonuses</div>';
+    html += `<div style="overflow-x:auto"><table class="cap"><thead><tr>
+      <th class="l"${TH}>Player</th><th${TH}>Amount</th><th${TH}>Pro-Rated</th>
+    </tr></thead><tbody>`;
+    tradeBonusRows.forEach((r, idx) => {
+      html += `<tr class="${idx%2===0?'ev':'od'}"><td class="nm">${r.player}</td><td>${r.amount}</td><td>${r.prorated}</td></tr>`;
+    });
+    html += '</tbody></table></div>';
+  }
+
+  // Partial Guarantees
+  if (partialRows.length && partialRows.some(r => r.player && r.player !== 'Total')) {
+    html += '<div class="sec-hdr">Partial Guarantees</div>';
+    html += `<div style="overflow-x:auto"><table class="cap"><thead><tr>
+      <th class="l"${TH}>Player</th><th${TH}>2025/2026</th><th${TH}>2026/2027</th>
+      <th${TH}>2027/2028</th><th${TH}>2028/2029</th><th${TH}>2029/2030</th>
+    </tr></thead><tbody>`;
+    partialRows.forEach((r, idx) => {
+      if (r.player === 'Total') html += '<tr style="font-weight:700;border-top:2px solid #333"><td class="nm">Total</td>';
+      else html += `<tr class="${idx%2===0?'ev':'od'}"><td class="nm">${r.player}</td>`;
+      r.values.forEach(v => html += `<td>${v}</td>`);
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+
+  // Tax & Apron Only
+  if (taxApronRows.length && taxApronRows.some(r => r.player && r.player !== 'Total')) {
+    html += '<div class="sec-hdr">Tax &amp; Apron Only</div>';
+    html += `<div style="overflow-x:auto"><table class="cap"><thead><tr>
+      <th class="l"${TH}>Player</th><th${TH}>2025/2026</th><th${TH}>2026/2027</th>
+      <th${TH}>2027/2028</th><th${TH}>2028/2029</th><th${TH}>2029/2030</th>
+    </tr></thead><tbody>`;
+    taxApronRows.forEach((r, idx) => {
+      if (r.player === 'Total') html += '<tr style="font-weight:700;border-top:2px solid #333"><td class="nm">Total</td>';
+      else html += `<tr class="${idx%2===0?'ev':'od'}"><td class="nm">${r.player}</td>`;
+      r.values.forEach(v => html += `<td>${v}</td>`);
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+
+  app.innerHTML = html;
+}
+
+// ---- Fetch and render ----
+async function init() {
+  try {
+    const resp = await fetch(TEAM_CONFIG.csvUrl);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const text = await resp.text();
+    buildPage(parseCSV(text));
+  } catch (err) {
+    console.error('Failed to load data:', err);
+    app.innerHTML = `<div class="error">
+      <p><strong>Unable to load data</strong></p>
+      <p>${err.message}</p>
+      <p style="margin-top:10px;font-size:12px;color:#666">
+        Make sure the Google Sheet is published to web and the CSV URL is correct.
+      </p>
+    </div>`;
+  }
+}
+
+init();
+</script>
+</body>
+</html>

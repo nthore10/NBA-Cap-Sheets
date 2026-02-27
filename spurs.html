@@ -14,7 +14,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .legend{display:flex;flex-wrap:wrap;gap:12px;padding:8px 15px;background:#fff;border-bottom:1px solid #e0e0e0;font-size:11px}
 .legend-item{display:flex;align-items:center;gap:4px}
 .legend-dot{width:10px;height:10px;border-radius:50%}
-.dot-po{background:#00B050}.dot-to{background:#F79646}.dot-ng{background:#C00000}.dot-rfa{background:#0070C0}.dot-ufa{background:#7030A0}
+.dot-po{background:#00B050}.dot-to{background:#F79646}.dot-ng{background:#C00000}.dot-rfa{background:#7030A0}.dot-ufa{background:#0070C0}
 .legend-name{font-weight:600;padding:1px 6px;border-radius:3px;font-size:10px}
 .ln-full{color:#00B050}.ln-early{color:#F79646}.ln-non{color:#C00000}
 table.cap{width:100%;border-collapse:collapse;background:#fff;font-size:12px}
@@ -28,8 +28,9 @@ tr.sep td{height:4px;padding:0;background:#e0e0e0;border:none}
 tr.sum td{font-weight:600;border-top:2px solid var(--team-primary);background:#f8f9fa}
 td.sl{text-align:left}
 .po{color:#00B050!important;font-weight:600}.to{color:#F79646!important;font-weight:600}
-.ng{color:#C00000!important;font-weight:600}.rfa{color:#0070C0!important;font-weight:600}
-.ufa{color:#7030A0!important;font-weight:600}.nv{color:#c00}
+.ng{color:#C00000!important;font-weight:600}.rfa{color:#7030A0!important;font-weight:600}
+.ufa{color:#0070C0!important;font-weight:600}.nv{color:#c00}
+.pv{color:#00B050!important;font-weight:600}
 .sec-hdr{background:var(--team-primary);color:#fff;padding:8px 15px;font-weight:700;font-size:13px;margin-top:10px;border-radius:4px 4px 0 0}
 .side-tables{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-top:15px}
 .side-tbl{background:#fff;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1)}
@@ -55,8 +56,8 @@ td.sl{text-align:left}
 const TEAM_CONFIG = {
   // Published CSV URL for this team's tab (File → Share → Publish to web → select tab → CSV)
   csvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRTwTOS_rNBYI8d8zDUivGFWXsXcxlOZgrqn5o-WCvFC5aNAR3vLsSqllE7aO0BRw/pub?gid=1453561663&single=true&output=csv',
-  primaryColor: '#C4CED4',
-  textColor: '#000000',
+  primaryColor: '#546675',
+  textColor: '#FFFFFF',
 };
 // ============================================================
 
@@ -320,11 +321,16 @@ function buildPage(rows) {
 
   html += '<tr class="sep"><td colspan="12"></td></tr>';
 
+  const greenIfPositive = ['Current Cap Room','Projected Cap Room','Room Under Tax','Room Under First Apron','Room Under Second Apron'];
+
   summaryRows.forEach(s => {
+    const isRoomRow = greenIfPositive.includes(s.label);
     html += `<tr class="sum"><td></td><td class="sl" style="color:${pc}">${s.label}</td>`;
     s.values.forEach(v => {
       const neg = isNegative(v.sal);
-      html += `<td${neg ? ' class="ng nv"' : ''}>${v.sal}</td><td>${v.pct}</td>`;
+      const pos = isRoomRow && v.sal && !neg && v.sal.includes('$');
+      const cls = neg ? ' class="ng nv"' : pos ? ' class="pv"' : '';
+      html += `<td${cls}>${v.sal}</td><td>${v.pct}</td>`;
     });
     html += '</tr>';
   });

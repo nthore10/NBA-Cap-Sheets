@@ -18,12 +18,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .legend-name{font-weight:600;padding:1px 6px;border-radius:3px;font-size:10px}
 .ln-full{color:#00B050}.ln-early{color:#F79646}.ln-non{color:#C00000}
 table.cap{width:100%;border-collapse:collapse;background:#fff;font-size:12px}
-table.cap th{padding:8px 6px;text-align:center;font-weight:600;font-size:11px;white-space:nowrap;border:1px solid rgba(255,255,255,.2)}
+table.cap th{padding:8px 6px;text-align:center;font-weight:600;font-size:11px;white-space:nowrap;border:none}
 table.cap th.l{text-align:left;min-width:140px}
-table.cap td{padding:5px 6px;border:1px solid #e8e8e8;text-align:right;white-space:nowrap}
+table.cap td{padding:5px 6px;border:none;text-align:right;white-space:nowrap}
 td.pos{text-align:center;font-weight:600;width:40px}
 td.nm{text-align:left;font-weight:500}
-tr.ev{background:#f0f4f8}tr.od{background:#fff}
+tr.pointed td{background:#fff}
 tr.sep td{height:4px;padding:0;background:#e0e0e0;border:none}
 tr.sum td{font-weight:600;border-top:2px solid var(--team-primary);background:#f8f9fa}
 td.sl{text-align:left}
@@ -36,7 +36,7 @@ td.sl{text-align:left}
 .side-tbl{background:#fff;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1)}
 .side-tbl h3{padding:8px 12px;font-size:13px}
 .side-tbl table{width:100%;border-collapse:collapse;font-size:11px}
-.side-tbl td,.side-tbl th{padding:4px 8px;border:1px solid #e8e8e8}
+.side-tbl td,.side-tbl th{padding:4px 8px;border:none}
 .side-tbl th{background:#f5f5f5;font-weight:600;text-align:left}
 .loading{text-align:center;padding:40px;font-size:16px;color:#666}
 .error{text-align:center;padding:40px;font-size:14px;color:#c00}
@@ -308,9 +308,8 @@ function buildPage(rows) {
   </tr></thead><tbody>`;
 
   playerRows.forEach((p, idx) => {
-    const rc = idx % 2 === 0 ? 'ev' : 'od';
     const nc = getNameClass(p.faType);
-    html += `<tr class="${rc}"><td class="pos">${p.pos}</td>`;
+    html += `<tr class="pointed"><td class="pos">${p.pos}</td>`;
     html += `<td class="nm${nc ? ' '+nc : ''}">${p.name}</td>`;
     p.years.forEach(y => {
       const sc = getStatusClass(y.status);
@@ -419,7 +418,7 @@ function buildPage(rows) {
       <th${TH}>Likely</th><th${TH}>Unlikely</th><th${TH}>Earned</th><th${TH}>Pending</th>
     </tr></thead><tbody>`;
     incentiveRows.forEach((r, idx) => {
-      html += `<tr class="${idx%2===0?'ev':'od'}"><td class="pos">${r.season}</td><td class="nm">${r.player}</td>`;
+      html += `<tr class="pointed"><td class="pos">${r.season}</td><td class="nm">${r.player}</td>`;
       html += `<td>${r.max}</td><td>${r.likely}</td><td>${r.unlikely}</td><td>${r.earned}</td><td>${r.pending}</td></tr>`;
     });
     html += '</tbody></table></div>';
@@ -432,7 +431,7 @@ function buildPage(rows) {
       <th class="l"${TH}>Player</th><th${TH}>Amount</th><th${TH}>Pro-Rated</th>
     </tr></thead><tbody>`;
     tradeBonusRows.forEach((r, idx) => {
-      html += `<tr class="${idx%2===0?'ev':'od'}"><td class="nm">${r.player}</td><td>${r.amount}</td><td>${r.prorated}</td></tr>`;
+      html += `<tr class="pointed"><td class="nm">${r.player}</td><td>${r.amount}</td><td>${r.prorated}</td></tr>`;
     });
     html += '</tbody></table></div>';
   }
@@ -446,7 +445,7 @@ function buildPage(rows) {
     </tr></thead><tbody>`;
     partialRows.forEach((r, idx) => {
       if (r.player === 'Total') html += '<tr style="font-weight:700;border-top:2px solid #333"><td class="nm">Total</td>';
-      else html += `<tr class="${idx%2===0?'ev':'od'}"><td class="nm">${r.player}</td>`;
+      else html += `<tr class="pointed"><td class="nm">${r.player}</td>`;
       r.values.forEach(v => html += `<td>${v}</td>`);
       html += '</tr>';
     });
@@ -462,7 +461,7 @@ function buildPage(rows) {
     </tr></thead><tbody>`;
     taxApronRows.forEach((r, idx) => {
       if (r.player === 'Total') html += '<tr style="font-weight:700;border-top:2px solid #333"><td class="nm">Total</td>';
-      else html += `<tr class="${idx%2===0?'ev':'od'}"><td class="nm">${r.player}</td>`;
+      else html += `<tr class="pointed"><td class="nm">${r.player}</td>`;
       r.values.forEach(v => html += `<td>${v}</td>`);
       html += '</tr>';
     });

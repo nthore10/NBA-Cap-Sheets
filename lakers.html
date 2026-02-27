@@ -14,28 +14,29 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .legend{display:flex;flex-wrap:wrap;gap:12px;padding:8px 15px;background:#fff;border-bottom:1px solid #e0e0e0;font-size:11px}
 .legend-item{display:flex;align-items:center;gap:4px}
 .legend-dot{width:10px;height:10px;border-radius:50%}
-.dot-po{background:#00B050}.dot-to{background:#F79646}.dot-ng{background:#C00000}.dot-rfa{background:#0070C0}.dot-ufa{background:#7030A0}
+.dot-po{background:#00B050}.dot-to{background:#F79646}.dot-ng{background:#C00000}.dot-rfa{background:#7030A0}.dot-ufa{background:#0070C0}
 .legend-name{font-weight:600;padding:1px 6px;border-radius:3px;font-size:10px}
 .ln-full{color:#00B050}.ln-early{color:#F79646}.ln-non{color:#C00000}
 table.cap{width:100%;border-collapse:collapse;background:#fff;font-size:12px}
-table.cap th{padding:8px 6px;text-align:center;font-weight:600;font-size:11px;white-space:nowrap;border:1px solid rgba(255,255,255,.2)}
+table.cap th{padding:8px 6px;text-align:center;font-weight:600;font-size:11px;white-space:nowrap;border:none}
 table.cap th.l{text-align:left;min-width:140px}
-table.cap td{padding:5px 6px;border:1px solid #e8e8e8;text-align:right;white-space:nowrap}
+table.cap td{padding:5px 6px;border:none;text-align:right;white-space:nowrap}
 td.pos{text-align:center;font-weight:600;width:40px}
 td.nm{text-align:left;font-weight:500}
-tr.ev{background:#f0f4f8}tr.od{background:#fff}
+tr.pointed td{background:#fff}
 tr.sep td{height:4px;padding:0;background:#e0e0e0;border:none}
 tr.sum td{font-weight:600;border-top:2px solid var(--team-primary);background:#f8f9fa}
 td.sl{text-align:left}
 .po{color:#00B050!important;font-weight:600}.to{color:#F79646!important;font-weight:600}
-.ng{color:#C00000!important;font-weight:600}.rfa{color:#0070C0!important;font-weight:600}
-.ufa{color:#7030A0!important;font-weight:600}.nv{color:#c00}
+.ng{color:#C00000!important;font-weight:600}.rfa{color:#7030A0!important;font-weight:600}
+.ufa{color:#0070C0!important;font-weight:600}.nv{color:#c00}
+.pv{color:#00B050!important;font-weight:600}
 .sec-hdr{background:var(--team-primary);color:#fff;padding:8px 15px;font-weight:700;font-size:13px;margin-top:10px;border-radius:4px 4px 0 0}
 .side-tables{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-top:15px}
 .side-tbl{background:#fff;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1)}
 .side-tbl h3{padding:8px 12px;font-size:13px}
 .side-tbl table{width:100%;border-collapse:collapse;font-size:11px}
-.side-tbl td,.side-tbl th{padding:4px 8px;border:1px solid #e8e8e8}
+.side-tbl td,.side-tbl th{padding:4px 8px;border:none}
 .side-tbl th{background:#f5f5f5;font-weight:600;text-align:left}
 .loading{text-align:center;padding:40px;font-size:16px;color:#666}
 .error{text-align:center;padding:40px;font-size:14px;color:#c00}
@@ -56,7 +57,7 @@ const TEAM_CONFIG = {
   // Published CSV URL for this team's tab (File → Share → Publish to web → select tab → CSV)
   csvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRTwTOS_rNBYI8d8zDUivGFWXsXcxlOZgrqn5o-WCvFC5aNAR3vLsSqllE7aO0BRw/pub?gid=1372973880&single=true&output=csv',
   primaryColor: '#552583',
-  textColor: '#FFD700',
+  textColor: '#FDB927',
 };
 // ============================================================
 
@@ -307,9 +308,8 @@ function buildPage(rows) {
   </tr></thead><tbody>`;
 
   playerRows.forEach((p, idx) => {
-    const rc = idx % 2 === 0 ? 'ev' : 'od';
     const nc = getNameClass(p.faType);
-    html += `<tr class="${rc}"><td class="pos">${p.pos}</td>`;
+    html += `<tr class="pointed"><td class="pos">${p.pos}</td>`;
     html += `<td class="nm${nc ? ' '+nc : ''}">${p.name}</td>`;
     p.years.forEach(y => {
       const sc = getStatusClass(y.status);
@@ -320,11 +320,16 @@ function buildPage(rows) {
 
   html += '<tr class="sep"><td colspan="12"></td></tr>';
 
+  const greenIfPositive = ['Current Cap Room','Projected Cap Room','Room Under Tax','Room Under First Apron','Room Under Second Apron'];
+
   summaryRows.forEach(s => {
+    const isRoomRow = greenIfPositive.includes(s.label);
     html += `<tr class="sum"><td></td><td class="sl" style="color:${pc}">${s.label}</td>`;
     s.values.forEach(v => {
       const neg = isNegative(v.sal);
-      html += `<td${neg ? ' class="ng nv"' : ''}>${v.sal}</td><td>${v.pct}</td>`;
+      const pos = isRoomRow && v.sal && !neg && v.sal.includes('$');
+      const cls = neg ? ' class="ng nv"' : pos ? ' class="pv"' : '';
+      html += `<td${cls}>${v.sal}</td><td>${v.pct}</td>`;
     });
     html += '</tr>';
   });
@@ -413,7 +418,7 @@ function buildPage(rows) {
       <th${TH}>Likely</th><th${TH}>Unlikely</th><th${TH}>Earned</th><th${TH}>Pending</th>
     </tr></thead><tbody>`;
     incentiveRows.forEach((r, idx) => {
-      html += `<tr class="${idx%2===0?'ev':'od'}"><td class="pos">${r.season}</td><td class="nm">${r.player}</td>`;
+      html += `<tr class="pointed"><td class="pos">${r.season}</td><td class="nm">${r.player}</td>`;
       html += `<td>${r.max}</td><td>${r.likely}</td><td>${r.unlikely}</td><td>${r.earned}</td><td>${r.pending}</td></tr>`;
     });
     html += '</tbody></table></div>';
@@ -426,7 +431,7 @@ function buildPage(rows) {
       <th class="l"${TH}>Player</th><th${TH}>Amount</th><th${TH}>Pro-Rated</th>
     </tr></thead><tbody>`;
     tradeBonusRows.forEach((r, idx) => {
-      html += `<tr class="${idx%2===0?'ev':'od'}"><td class="nm">${r.player}</td><td>${r.amount}</td><td>${r.prorated}</td></tr>`;
+      html += `<tr class="pointed"><td class="nm">${r.player}</td><td>${r.amount}</td><td>${r.prorated}</td></tr>`;
     });
     html += '</tbody></table></div>';
   }
@@ -440,7 +445,7 @@ function buildPage(rows) {
     </tr></thead><tbody>`;
     partialRows.forEach((r, idx) => {
       if (r.player === 'Total') html += '<tr style="font-weight:700;border-top:2px solid #333"><td class="nm">Total</td>';
-      else html += `<tr class="${idx%2===0?'ev':'od'}"><td class="nm">${r.player}</td>`;
+      else html += `<tr class="pointed"><td class="nm">${r.player}</td>`;
       r.values.forEach(v => html += `<td>${v}</td>`);
       html += '</tr>';
     });
@@ -456,7 +461,7 @@ function buildPage(rows) {
     </tr></thead><tbody>`;
     taxApronRows.forEach((r, idx) => {
       if (r.player === 'Total') html += '<tr style="font-weight:700;border-top:2px solid #333"><td class="nm">Total</td>';
-      else html += `<tr class="${idx%2===0?'ev':'od'}"><td class="nm">${r.player}</td>`;
+      else html += `<tr class="pointed"><td class="nm">${r.player}</td>`;
       r.values.forEach(v => html += `<td>${v}</td>`);
       html += '</tr>';
     });
